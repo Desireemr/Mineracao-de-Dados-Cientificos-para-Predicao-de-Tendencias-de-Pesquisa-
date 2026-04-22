@@ -1,0 +1,46 @@
+# instalar bibliotecas necessárias
+!pip install pandas openpyxl nltk
+
+import pandas as pd
+import nltk
+from nltk.corpus import stopwords
+from google.colab import files
+
+# baixar lista de stopwords
+nltk.download('stopwords')
+
+# upload do arquivo excel
+uploaded = files.upload()
+
+# identificar nome do arquivo
+file_name = list(uploaded.keys())[0]
+
+# ler arquivo
+df = pd.read_excel(file_name)
+
+# carregar stopwords em inglês
+stop_words = set(stopwords.words('english'))
+
+# função para remover stopwords
+def remove_stopwords(text):
+    
+    if pd.isna(text):
+        return ""
+    
+    words = str(text).split()
+    
+    filtered_words = [word for word in words if word not in stop_words]
+    
+    return " ".join(filtered_words)
+
+# aplicar na coluna corpus
+df['corpus'] = df['corpus'].apply(remove_stopwords)
+
+# salvar resultado
+output_file = "dataset_sem_stopwords.xlsx"
+df.to_excel(output_file, index=False)
+
+# download do arquivo
+files.download(output_file)
+
+print("Remoção de stopwords concluída. Arquivo gerado.")
