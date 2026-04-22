@@ -1,0 +1,143 @@
+file_extension = os.path.splitext(file_name)[1].lower()
+
+if file_extension == '.xlsx':
+    try:
+        df = pd.read_excel(file_name, engine='openpyxl')
+        print("✔ Excel carregado com sucesso.")
+    except Exception as e:
+        print(f"❌ Erro ao carregar o arquivo Excel '{file_name}': {e}")
+        print("Por favor, verifique se o arquivo '.xlsx' está corrompido ou não é um arquivo Excel válido.")
+        raise Exception("Falha na leitura do arquivo Excel.")
+elif file_extension == '.csv':
+    try:
+        df = pd.read_csv(file_name)
+        print("✔ CSV carregado com sucesso.")
+    except Exception as e:
+        print(f"❌ Erro ao carregar o arquivo CSV '{file_name}': {e}")
+        print("Verifique se o arquivo '.csv' está no formato correto e sem caracteres especiais.")
+        raise Exception("Falha na leitura do arquivo CSV.")
+else:
+    print(f"❌ Extensão de arquivo não suportada: {file_extension}. Por favor, use '.xlsx' ou '.csv'.")
+    raise Exception("Extensão de arquivo não suportada.")
+# =========================================
+# 4. PADRONIZAÇÃO
+# =========================================
+df.columns = [c.strip().lower() for c in df.columns]
+
+# =========================================
+# 5. IDENTIFICAR COLUNAS AUTOMATICAMENTE
+# =========================================
+def find_col(keywords):
+    for k in keywords:
+        for col in df.columns:
+            if k in col:
+                return col
+    return None
+col_texto = find_col(['abstract', 'corpus', 'keyword'])
+col_topic = find_col(['topic'])
+col_ano = find_col(['ano', 'year'])
+if col_texto is None:
+    raise Exception("❌ Não encontrei coluna de texto (abstract/keywords)")
+# =========================================
+# 6. LIMPEZA DO TEXTO
+# =========================================
+def clean_text(text):
+    if pd.isna(text):
+        return ""
+    text = str(text).lower()
+    text = re.sub(r'[^a-zá-ú\s]', ' ', text)
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
+df['texto_limpo'] = df[col_texto].apply(clean_text)
+
+# =========================================
+# 7. DOC_ID
+# =========================================
+df['doc_id'] = range(1, len(df)+1)
+
+# =========================================
+# 8. TEMA CENTRAL (BASEADO NA LITERATURA)
+# =========================================
+def classificar_tema(text):
+    if any(x in text for x in ['covid', 'pandemic', 'health']):
+        return 'Saúde Pública'
+    elif any(x in text for x in ['education', 'learning', 'teaching']):
+        return 'Educação'
+    elif any(x in text for x in ['dengue', 'aedes', 'mosquito']):
+        return 'Doenças Tropicais'
+    elif any(x in text for x in ['gender', 'women']):
+        return 'Estudos de Gênero'
+    elif any(x in text for x in ['pollution', 'air']):
+        return 'Meio Ambiente'
+    elif any(x in text for x in ['antibiotic', 'resistance']):
+        return 'Resistência Microbiana'
+    elif any(x in text for x in ['tuberculosis', 'tb']):
+        return 'Tuberculose'
+    else:
+        return 'Outros'
+df['tema_central'] = df['texto_limpo'].apply(classificar_tema)
+
+# =========================================
+# 9. ÁREA MACRO
+# =========================================
+mapa_area = {
+    'Saúde Pública': 'Ciências da Saúde',
+    'Educação': 'Ciências Sociais',
+    'Doenças Tropicais': 'Ciências Biológicas',
+    'Estudos de Gênero': 'Ciências Sociais',
+    'Meio Ambiente': 'Ciências Ambientais',
+    'Resistência Microbiana': 'Ciências da Saúde',
+    'Tuberculose': 'Ciências da Saúde',
+    'Outros': 'Interdisciplinar'}
+df['area'] = df['tema_central'].map(mapa_area)
+
+# =========================================
+# 10. NATUREZA (TEÓRICA vs APLICADA)
+# =========================================
+def classificar_natureza(text):
+    if any(x in text for x in ['study', 'analysis', 'data', 'model']):
+        return 'Aplicada'
+    return 'Teórica'
+df['natureza'] = df['texto_limpo'].apply(classificar_natureza)
+# =========================================
+# 11. CONTEXTO REGIONAL
+# =========================================
+def classificar_contexto(text):
+    if any(x in text for x in ['brazil', 'latin', 'argentina', 'chile']):
+        return 'América Latina'
+    elif any(x in text for x in ['usa', 'europe', 'uk']):
+        return 'Global Norte'
+    return 'Global'
+df['contexto'] = df['texto_limpo'].apply(classificar_contexto)
+# =========================================
+# 12. CORPUS PONDERADO
+# =========================================
+df['corpus_ponderado'] = (
+    df['texto_limpo'] + " | " +
+    df['tema_central'] + " | " +
+    df['area']
+)
+# =========================================
+# 13. DATASET FINAL
+# =========================================
+# Check if col_topic and col_ano are not None before accessing df[col_topic] or df[col_ano]
+topic_data = df[col_topic] if col_topic is not None else ''
+ano_data = df[col_ano] if col_ano is not None else ''
+df_final = pd.DataFrame({
+    'doc_id': df['doc_id'],
+    'texto_limpo': df['texto_limpo'],
+    'topic': topic_data,
+    'tema_central': df['tema_central'],
+    'area': df['area'],
+    'natureza': df['natureza'],
+    'contexto': df['contexto'],
+    'ano': ano_data,
+    'corpus_ponderado': df['corpus_ponderado']})
+# =========================================
+# 14. EXPORTAR
+# =========================================
+output = "corpus_enriquecido.xlsx"
+df_final.to_excel(output, index=False)
+files.download(output)
+print("✔ Planilha final gerada com sucesso.")
