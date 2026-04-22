@@ -1,0 +1,65 @@
+# instalar bibliotecas necessárias
+!pip install pandas openpyxl
+
+import pandas as pd
+import re
+from google.colab import files
+
+# upload do arquivo excel
+uploaded = files.upload()
+
+# identificar nome do arquivo
+file_name = list(uploaded.keys())[0]
+
+# leitura do arquivo
+df = pd.read_excel(file_name)
+
+# função de normalização textual
+def normalize_text(text):
+    
+    if pd.isna(text):
+        return ""
+    
+    text = str(text)
+    
+    # converter para minúsculas
+    text = text.lower()
+    
+    # remover pontuação
+    text = re.sub(r'[^\w\s]', ' ', text)
+    
+    # remover números
+    text = re.sub(r'\d+', ' ', text)
+    
+    # remover espaços duplicados
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    return text
+
+
+# colunas que serão processadas
+cols = ['abstract', 'keywords', 'keywords_plus']
+
+for col in cols:
+    if col in df.columns:
+        df[col] = df[col].apply(normalize_text)
+
+
+# criação da coluna corpus
+df['corpus'] = (
+    df['abstract'].fillna('') + ' ' +
+    df['keywords'].fillna('') + ' ' +
+    df['keywords_plus'].fillna('')
+)
+
+# remover espaços duplicados do corpus
+df['corpus'] = df['corpus'].apply(lambda x: re.sub(r'\s+', ' ', x).strip())
+
+# salvar novo arquivo
+output_file = "dataset_preprocessado.xlsx"
+df.to_excel(output_file, index=False)
+
+# download automático
+files.download(output_file)
+
+print("Processamento concluído. Arquivo gerado para download.")
