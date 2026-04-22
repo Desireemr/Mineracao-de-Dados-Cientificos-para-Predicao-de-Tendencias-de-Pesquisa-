@@ -1,0 +1,118 @@
+df = pd.read_excel(file_name)
+
+print("Colunas do dataset:")
+print(df.columns)
+
+# ==============================
+# 4. SELEÇÃO DAS VARIÁVEIS
+# ==============================
+features = ['Citações', 'growth_rate_real', 'score', 'Porcentagem', 'topic', 'area']
+target = 'tendencia_classificada'
+
+df = df[features + [target]]
+
+# ==============================
+# 5. LIMPEZA
+# ==============================
+df = df.dropna()
+
+# ==============================
+# 6. ENCODING
+# ==============================
+le_topic = LabelEncoder()
+le_area = LabelEncoder()
+le_target = LabelEncoder()
+
+df['topic'] = le_topic.fit_transform(df['topic'])
+df['area'] = le_area.fit_transform(df['area'])
+df[target] = le_target.fit_transform(df[target])
+
+# ==============================
+# 7. NORMALIZAÇÃO
+# ==============================
+scaler = StandardScaler()
+df[['Citações', 'score', 'Porcentagem']] = scaler.fit_transform(
+    df[['Citações', 'score', 'Porcentagem']]
+)
+
+# ==============================
+# 8. DEFINIÇÃO DE X E y
+# ==============================
+X = df[features]
+y = df[target]
+
+# ==============================
+# 9. TREINO E TESTE
+# ==============================
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+
+# ==============================
+# 10. MODELO
+# ==============================
+modelo = RandomForestClassifier(n_estimators=100, random_state=42)
+modelo.fit(X_train, y_train)
+
+# ==============================
+# 11. AVALIAÇÃO TRADICIONAL
+# ==============================
+y_pred = modelo.predict(X_test)
+
+print("\n=== Classification Report ===")
+print(classification_report(y_test, y_pred))
+
+# Matriz de confusão
+cm = confusion_matrix(y_test, y_pred)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+disp.plot()
+plt.title("Matriz de Confusão")
+plt.show()
+
+# ==============================
+# 12. VALIDAÇÃO CRUZADA (K-FOLD)
+# ==============================
+kfold = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+
+scores = cross_val_score(modelo, X, y, cv=kfold, scoring='accuracy')
+
+print("\n=== Validação Cruzada ===")
+print("Acurácia por fold:", scores)
+print("Acurácia média:", np.mean(scores))
+print("Desvio padrão:", np.std(scores))
+
+# Métricas completas
+scoring = ['accuracy', 'precision_macro', 'recall_macro', 'f1_macro']
+
+resultados_cv = cross_validate(modelo, X, y, cv=kfold, scoring=scoring)
+
+print("\n=== Métricas Cross-Validation ===")
+print("Acurácia média:", np.mean(resultados_cv['test_accuracy']))
+print("Precisão média:", np.mean(resultados_cv['test_precision_macro']))
+print("Recall médio:", np.mean(resultados_cv['test_recall_macro']))
+print("F1-score médio:", np.mean(resultados_cv['test_f1_macro']))
+
+# Boxplot
+plt.boxplot(scores)
+plt.title("Validação Cruzada - Acurácia")
+plt.show()
+
+# ==============================
+# 13. IMPORTÂNCIA DAS VARIÁVEIS
+# ==============================
+importancias = modelo.feature_importances_
+
+df_importancia = pd.DataFrame({
+    'Variável': features,
+    'Importância': importancias
+}).sort_values(by='Importância', ascending=False)
+
+print("\n=== Importância das Variáveis ===")
+print(df_importancia)
+
+# Gráfico
+plt.figure()
+plt.bar(df_importancia['Variável'], df_importancia['Importância'])
+plt.xticks(rotation=45)
+plt.title("Importância das Variáveis")
+plt.show()
