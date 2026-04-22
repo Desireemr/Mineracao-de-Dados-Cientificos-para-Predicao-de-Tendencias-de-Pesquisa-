@@ -1,0 +1,91 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import io
+from google.colab import files
+
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix
+
+# ------------------------------------------------------------------------------
+# 1. UPLOAD INTERATIVO
+# ------------------------------------------------------------------------------
+print("--- Passo 1: Upload do Dataset (dataset_modelo_random_forest.xlsx) ---")
+uploaded = files.upload()
+file_name = list(uploaded.keys())[0]
+
+try:
+    # Leitura do arquivo Excel
+    df = pd.read_excel(io.BytesIO(uploaded[file_name]))
+    print(f"\nArquivo '{file_name}' carregado com sucesso.\n")
+
+    # --------------------------------------------------------------------------
+    # 2. PRÉ-PROCESSAMENTO
+    # --------------------------------------------------------------------------
+    df.columns = df.columns.str.strip()
+    features_cols = ['Citações', 'growth_rate_real', 'score', 'Porcentagem', 'topic', 'area']
+    target_col = 'tendencia_classificada'
+
+    # Validar colunas
+    missing_cols = [col for col in features_cols + [target_col] if col not in df.columns]
+    if missing_cols:
+        raise ValueError(f"Colunas ausentes: {missing_cols}")
+
+    # Limpeza e Encoding
+    df_clean = df.dropna(subset=features_cols + [target_col]).copy()
+
+    le_topic = LabelEncoder()
+    le_area = LabelEncoder()
+    le_target = LabelEncoder()
+
+    df_clean['topic'] = le_topic.fit_transform(df_clean['topic'].astype(str))
+    df_clean['area'] = le_area.fit_transform(df_clean['area'].astype(str))
+    df_clean[target_col] = le_target.fit_transform(df_clean[target_col].astype(str))
+
+    X = df_clean[features_cols]
+    y = df_clean[target_col]
+
+    # --------------------------------------------------------------------------
+    # 3. TREINAMENTO
+    # --------------------------------------------------------------------------
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.20, random_state=42, stratify=y
+    )
+
+    rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
+    rf_model.fit(X_train, y_train)
+
+    # --------------------------------------------------------------------------
+    # 4. PREDIÇÕES E AVALIAÇÃO
+    # --------------------------------------------------------------------------
+    y_pred = rf_model.predict(X_test)
+
+    # Criar DataFrame de resultados para o set de teste
+    df_resultados_teste = X_test.copy()
+    df_resultados_teste['Real'] = le_target.inverse_transform(y_test)
+    df_resultados_teste['Predito'] = le_target.inverse_transform(y_pred)
+
+    # --------------------------------------------------------------------------
+    # 5. IMPORTÂNCIA DAS VARIÁVEIS
+    # --------------------------------------------------------------------------
+    importances = rf_model.feature_importances_
+    df_importancia = pd.DataFrame({
+        'Variavel': features_cols,
+        'Importancia': importances
+    }).sort_values(by='Importancia', ascending=False)
+
+    # --------------------------------------------------------------------------
+    # 6. EXPORTAÇÃO PARA EXCEL (DOWNLOAD)
+    # --------------------------------------------------------------------------
+    nome_arquivo_saida = 'resultados_modelagem_rf.xlsx'
+
+    with pd.ExcelWriter(nome_arquivo_saida) as writer:
+        df_resultados_teste.to_excel(writer, sheet_name='Predicoes_Teste', index=False)
+        df_importancia.to_excel(writer, sheet_name='Importancia_Variaveis', index=False)
+
+        # Opcional: Adicionar métricas básicas em uma aba
+        report_dict = classification_report(y_test, y_pred, output_dict=True)
+        df_metrics = pd.DataFrame(report_dict).transpose()
+        df_metrics.to_excel(writer, sheet_name='Metricas_Performance')
