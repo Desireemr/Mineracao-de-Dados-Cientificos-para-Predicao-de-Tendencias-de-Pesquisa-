@@ -1,0 +1,61 @@
+# =========================================
+# 3. AJUSTE DE COLUNAS
+# =========================================
+col_texto = "abstract + keywords = corpus"
+col_topico = "topic"
+col_cit = "citações"
+col_pct = "porcentagem"
+col_core = "classe core document"
+col_ano = "ano"
+col_growth = "growth_rate"  # (nome corrigido)
+# Converter numéricos
+df[col_cit] = pd.to_numeric(df[col_cit], errors='coerce').fillna(0)
+df[col_pct] = pd.to_numeric(df[col_pct], errors='coerce').fillna(0)
+df[col_growth] = pd.to_numeric(df[col_growth], errors='coerce').fillna(0)
+# =========================================
+# 4. LIMPEZA DE TEXTO
+# =========================================
+import re
+def limpar_texto(texto):
+    if pd.isna(texto):
+        return ""
+    texto = texto.lower()
+    texto = re.sub(r'\n', ' ', texto)
+    texto = re.sub(r'[^a-záéíóúãõâêîôûç\s]', '', texto)
+    return texto
+df["corpus_limpo"] = df[col_texto].apply(limpar_texto)
+# =========================================
+# 5. NORMALIZAÇÃO DAS VARIÁVEIS
+# =========================================
+from sklearn.preprocessing import MinMaxScaler
+scaler = MinMaxScaler()
+df[["cit_norm"]] = scaler.fit_transform(df[[col_cit]])
+df[["pct_norm"]] = scaler.fit_transform(df[[col_pct]])
+df[["growth_norm"]] = scaler.fit_transform(df[[col_growth]])
+# Peso para core document (qualitativo → numérico)
+map_core = {
+    "high": 1.0,
+    "medium": 0.6,
+    "low": 0.3}
+df["core_weight"] = df[col_core].str.lower().map(map_core).fillna(0.5)
+# =========================================
+# 6. SCORE DE RELEVÂNCIA CIENTÍFICA
+# =========================================
+df["score"] = (
+    0.4 * df["cit_norm"] +
+    0.2 * df["pct_norm"] +
+    0.2 * df["growth_norm"] +
+    0.2 * df["core_weight"])
+# =========================================
+# 7. CORPUS PONDERADO (IMPORTANTE)
+# =========================================
+# Multiplica o texto pelo score → enfatiza documentos mais relevantes
+
+def repetir_texto(row):
+    peso = int(row["score"] * 10) + 1
+    return " ".join([row["corpus_limpo"]] * peso)
+df["corpus_expandido"] = df.apply(repetir_texto, axis=1)
+# =========================================
+# 8. CORPUS FINAL
+# =========================================
+corpus_final = " ".join(df["corpus_expandido"])
