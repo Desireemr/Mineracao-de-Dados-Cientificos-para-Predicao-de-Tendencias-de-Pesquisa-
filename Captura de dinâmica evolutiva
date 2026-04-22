@@ -1,0 +1,66 @@
+import pandas as pd
+import numpy as np
+from google.colab import files
+import os # Adicionado para verificar a extensão do arquivo
+# 2. Carregamento dos dados (robusto para CSV ou XLSX)
+file_extension = os.path.splitext(file_name)[1].lower()
+
+if file_extension == '.xlsx':
+    df = pd.read_excel(file_name, engine='openpyxl')
+    print(f"✔ Excel '{file_name}' carregado com sucesso.")
+elif file_extension == '.csv':
+    df = pd.read_csv(file_name, encoding='utf-8') # Tentar UTF-8 primeiro
+    print(f"✔ CSV '{file_name}' carregado com sucesso.")
+else:
+    raise ValueError(f"Extensão de arquivo não suportada: {file_extension}. Use .xlsx ou .csv.")
+
+# Garantir que a coluna ano seja numérica
+df['ano'] = pd.to_numeric(df['ano'], errors='coerce')
+
+# 3. Definição das Janelas Temporais (Conforme sua metodologia de 3 anos)
+# Vamos basear o cálculo no ano máximo encontrado na sua planilha
+ano_max = int(df['ano'].max())
+trienio_recente = [ano_max, ano_max-1, ano_max-2]
+trienio_anterior = [ano_max-3, ano_max-4, ano_max-5]
+
+print(f"Analisando Triênio Recente: {trienio_recente}")
+print(f"Analisando Triênio Anterior: {trienio_anterior}")
+
+# 4. Agrupamento e Cálculo do Growth Rate Real
+def calcular_crescimento_movel(group):
+    # Contagem de documentos em cada período
+    n_recente = group[group['ano'].isin(trienio_recente)].shape[0]
+    n_anterior = group[group['ano'].isin(trienio_anterior)].shape[0]
+
+    # Cálculo da variação relativa (Growth Rate)
+    # Fórmula: (V2 - V1) / V1
+    if n_anterior > 0:
+        return (n_recente - n_anterior) / n_anterior
+    elif n_recente > 0:
+        return 1.0  # Tópico novo que surgiu agora (Emergência Total)
+    else:
+        return 0.0
+
+# Criar um dicionário mapeando cada tópico ao seu crescimento real
+# Certifique-se de que a coluna 'topic' existe no DataFrame
+if 'topic' not in df.columns:
+    raise ValueError("A coluna 'topic' não foi encontrada no arquivo. Verifique o nome da coluna.")
+mapa_growth = df.groupby('topic').apply(calcular_crescimento_movel, include_groups=False).to_dict()
+
+# 5. Atribuição da nova variável ao DataFrame
+df['growth_rate_real'] = df['topic'].map(mapa_growth)
+
+# 6. Classificação de Tendência (Apêndice 08)
+def categorizar(gr):
+    if gr > 0.2: return 'Emergente (Explodindo)'
+    elif 0 < gr <= 0.2: return 'Estável'
+    else: return 'Em Declínio (Saturado)'
+
+df['tendencia_classificada'] = df['growth_rate_real'].apply(categorizar)
+
+# 7. Download do resultado
+output_name = 'corpus_com_growth_rate_corrigido.xlsx'
+df.to_excel(output_name, index=False)
+files.download(output_name)
+
+print("Processamento concluído. Verifique o arquivo baixado.")
