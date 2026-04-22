@@ -1,0 +1,85 @@
+# =========================================
+# 3. LEITURA AUTOMÁTICA
+# =========================================
+if file_name.endswith('.csv'):
+    df = pd.read_csv(file_name)
+else:
+    df = pd.read_excel(file_name, engine='openpyxl')
+
+# padronizar colunas
+df.columns = [c.strip() for c in df.columns]
+
+print("\nColunas detectadas:")
+print(df.columns.tolist())
+
+# =========================================
+# 4. SELEÇÃO DE COLUNAS
+# =========================================
+colunas_necessarias = [
+    'doc_id', 'texto_limpo', 'topic', 'tema_central',
+    'area', 'natureza', 'contexto', 'ano',
+    'corpus_ponderado', 'growth_rate_real',
+    'tendencia_classificada', 'Citações', 'score', 'Porcentagem'
+]
+
+df = df[colunas_necessarias]
+
+# =========================================
+# 5. LIMPEZA (REMOVER NULOS)
+# =========================================
+df = df.dropna()
+
+print(f"\nDataset após limpeza: {df.shape}")
+
+# =========================================
+# 6. FEATURE SELECTION
+# =========================================
+features = [
+    'Citações',
+    'growth_rate_real',
+    'score',
+    'Porcentagem',
+    'topic',
+    'area'
+]
+
+target = 'tendencia_classificada'
+
+# =========================================
+# 7. LABEL ENCODING
+# =========================================
+le = LabelEncoder()
+
+for col in ['topic', 'area', 'natureza', 'contexto', target]:
+    df[col] = le.fit_transform(df[col].astype(str))
+
+# =========================================
+# 8. NORMALIZAÇÃO
+# =========================================
+scaler = StandardScaler()
+
+cols_numericas = ['Citações', 'score', 'Porcentagem']
+
+df[cols_numericas] = scaler.fit_transform(df[cols_numericas])
+
+# =========================================
+# 9. DATASET FINAL
+# =========================================
+df_final = df[features + [target]]
+
+print("\nPreview do dataset final:")
+print(df_final.head())
+
+# =========================================
+# 10. EXPORTAÇÃO
+# =========================================
+arquivo_saida = "dataset_modelo_random_forest.xlsx"
+
+df_final.to_excel(arquivo_saida, index=False)
+
+print("\nArquivo gerado:", arquivo_saida)
+
+# =========================================
+# 11. DOWNLOAD AUTOMÁTICO
+# =========================================
+files.download(arquivo_saida)
