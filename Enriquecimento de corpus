@@ -1,0 +1,40 @@
+import pandas as pd
+from google.colab import files
+
+# 1. Carregar o último arquivo gerado (o corpus com GR real e Tendência)
+# Se o arquivo não estiver no ambiente, o Colab pedirá o upload
+try:
+    df = pd.read_excel('corpus_com_growth_rate_corrigido.xlsx')
+except:
+    print("Por favor, selecione o arquivo 'corpus_com_growth_rate_corrigido.xlsx':")
+    uploaded = files.upload()
+    file_name = list(uploaded.keys())[0]
+    df = pd.read_excel(file_name)
+
+# 2. Agregação por Tópico para criar o Ranking
+# Vamos calcular a média de citações, a média do score e manter o Growth Rate Real
+ranking = df.groupby('topic').agg({
+    'tema_central': 'first',      # Pega o nome do tema
+    'growth_rate_real': 'first', # O GR que calculamos (é igual para todo o tópico)
+    'doc_id': 'count'            # Volume total de documentos
+}).rename(columns={'doc_id': 'volume_total'})
+
+# 3. Criar um Score de Tendência Combinado (Opcional mas muito forte para TCC)
+# Este score pondera Crescimento (70%) e Impacto/Citações (30%)
+# Como 'num_citacoes' não existe, usaremos 'volume_total' como proxy para impacto
+# Se 'num_citacoes' ou 'score_cientifico' existirem, podem ser adicionados aqui.
+ranking['score_tendencia_final'] = (ranking['growth_rate_real'] * 0.7) + (ranking['volume_total'] * 0.001) # Usando volume_total com um fator para equilibrar escalas
+
+# 4. Filtrar apenas os "Emergentes" e ordenar pelo Score Final
+ranking_emergente = ranking[ranking['growth_rate_real'] > 0.2].sort_values(by='score_tendencia_final', ascending=False)
+
+# 5. Adicionar a coluna de Ranking (1º, 2º, 3º...)
+ranking_emergente.insert(0, 'posicao', range(1, len(ranking_emergente) + 1))
+
+# 6. Salvar e baixar
+nome_ranking = 'ranking_tendencias_cientificas_latam.xlsx'
+ranking_emergente.to_excel(nome_ranking, index=False)
+files.download(nome_ranking)
+
+print("Ranking gerado com sucesso!")
+print(ranking_emergente[['posicao', 'tema_central', 'growth_rate_real', 'volume_total']].head(10))
