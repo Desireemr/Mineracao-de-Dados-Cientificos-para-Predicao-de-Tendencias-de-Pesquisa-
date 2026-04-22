@@ -1,0 +1,84 @@
+   # ===============================
+# 1. INSTALAR BIBLIOTECAS
+# ===============================
+
+!pip install bertopic sentence-transformers pandas openpyxl
+
+# ===============================
+# 2. IMPORTAR BIBLIOTECAS
+# ===============================
+
+import pandas as pd
+from bertopic import BERTopic
+from sentence_transformers import SentenceTransformer
+from google.colab import files
+
+# ===============================
+# 3. UPLOAD DO ARQUIVO
+# ===============================
+
+uploaded = files.upload()
+file_name = list(uploaded.keys())[0]
+
+# ===============================
+# 4. LEITURA DO DATASET
+# ===============================
+
+df = pd.read_excel(file_name)
+
+# leitura da coluna corpus
+docs = df["abstract + keywords = corpus"].fillna("").astype(str).tolist()
+
+# ===============================
+# 5. MODELO DE EMBEDDING MAIS LEVE
+# ===============================
+
+embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+# ===============================
+# 6. TREINAR MODELO BERTopic
+# ===============================
+
+topic_model = BERTopic(
+    embedding_model=embedding_model,
+    calculate_probabilities=False,
+    verbose=True
+)
+
+topics, _ = topic_model.fit_transform(docs)
+
+# adicionar tópico ao dataset
+df["topic"] = topics
+
+# ===============================
+# 7. CONTAGEM DE FREQUÊNCIA
+# ===============================
+
+freq = df["topic"].value_counts().reset_index()
+freq.columns = ["topic", "frequency"]
+
+# ===============================
+# 8. INFORMAÇÕES DOS TÓPICOS
+# ===============================
+
+topic_info = topic_model.get_topic_info()
+
+# ===============================
+# 9. EXPORTAR RESULTADOS
+# ===============================
+
+with pd.ExcelWriter("resultado_topicos_bertopic.xlsx") as writer:
+
+    df.to_excel(writer, sheet_name="documentos", index=False)
+
+    topic_info.to_excel(writer, sheet_name="topicos", index=False)
+
+    freq.to_excel(writer, sheet_name="frequencia", index=False)
+
+# ===============================
+# 10. DOWNLOAD
+# ===============================
+
+files.download("resultado_topicos_bertopic.xlsx")
+
+print("Processamento finalizado.")
